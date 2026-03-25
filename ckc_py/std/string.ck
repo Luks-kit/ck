@@ -111,6 +111,17 @@ struct String {
         return String.from(self.ptr());
     }
 
+    fn $init from_range(const char* src, usize len) -> Self {
+        if (src == null) return { StringStorage.lit(null), 0, 0 };
+        
+        char* p = malloc(len + 1);
+        assert(p != null);
+        memcpy(p, src, len);
+        p[len] = 0;
+
+        return { StringStorage.buf(p), len, len };
+    }
+
     // ── Internal Helpers ──────────────────────────────────────────────────────
 
     fn _mut_ptr() -> char* {

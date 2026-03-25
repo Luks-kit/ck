@@ -5,14 +5,1319 @@
 #include <stddef.h>
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <assert.h>
+
+#ifndef SEEK_SET
+#define SEEK_SET (0)
+#endif
+#ifndef SEEK_CUR
+#define SEEK_CUR (1)
+#endif
+#ifndef SEEK_END
+#define SEEK_END (2)
+#endif
+
+#ifndef SEEK_SET
+#define SEEK_SET (0)
+#endif
+#ifndef SEEK_CUR
+#define SEEK_CUR (1)
+#endif
+#ifndef SEEK_END
+#define SEEK_END (2)
+#endif
+
 
 /* ── forward declarations ── */
+typedef struct HeapAllocator_s HeapAllocator;
+typedef struct Literal_s Literal;
+typedef struct Span_s Span;
+typedef struct Token_s Token;
+typedef struct Result_TokType_char_ptr_s Result_TokType_char_ptr;
+typedef struct hashmap_char_ptr_TokType_s hashmap_char_ptr_TokType;
+typedef struct wordstore_s wordstore;
+typedef struct vector_Token_s vector_Token;
+typedef struct Lexer_s Lexer;
+typedef struct File_s File;
+typedef struct Result_File_char_ptr_s Result_File_char_ptr;
+typedef struct Result_String_char_ptr_s Result_String_char_ptr;
+typedef struct StringStorage_s StringStorage;
+typedef struct String_s String;
+typedef enum {
+    EntryState_Empty,
+    EntryState_Occupied,
+    EntryState_Tombstone,
+} EntryState;
+typedef enum {
+    TokType_IntLit,
+    TokType_FloatLit,
+    TokType_StringLit,
+    TokType_CharLit,
+    TokType_BoolLit,
+    TokType_Null,
+    TokType_Ident,
+    TokType_Dollar,
+    TokType_Import,
+    TokType_Template,
+    TokType_Interface,
+    TokType_Implement,
+    TokType_Init,
+    TokType_Dinit,
+    TokType_Tag,
+    TokType_ConstIf,
+    TokType_Scope,
+    TokType_Defer,
+    TokType_Include,
+    TokType_Extern,
+    TokType_Fn,
+    TokType_Struct,
+    TokType_Union,
+    TokType_Enum,
+    TokType_Return,
+    TokType_If,
+    TokType_Else,
+    TokType_For,
+    TokType_While,
+    TokType_Break,
+    TokType_Continue,
+    TokType_Switch,
+    TokType_Case,
+    TokType_Default,
+    TokType_Let,
+    TokType_ConstExpr,
+    TokType_TypeDef,
+    TokType_Type,
+    TokType_NameSpace,
+    TokType_Auto,
+    TokType_Sizeof,
+    TokType_Lenof,
+    TokType_Self_,
+    TokType_SelfType,
+    TokType_Assert,
+    TokType_True,
+    TokType_False,
+    TokType_LParen,
+    TokType_RParen,
+    TokType_LBrace,
+    TokType_RBrace,
+    TokType_LBracket,
+    TokType_RBracket,
+    TokType_LShift,
+    TokType_RShift,
+    TokType_Semi,
+    TokType_Colon,
+    TokType_Comma,
+    TokType_Dot,
+    TokType_Arrow,
+    TokType_Question,
+    TokType_NullCoal,
+    TokType_Plus,
+    TokType_Minus,
+    TokType_Star,
+    TokType_Slash,
+    TokType_Percent,
+    TokType_Eq,
+    TokType_Neq,
+    TokType_Less,
+    TokType_Greater,
+    TokType_LessEq,
+    TokType_GreaterEq,
+    TokType_And,
+    TokType_Or,
+    TokType_Bang,
+    TokType_Assign,
+    TokType_PlusEq,
+    TokType_MinusEq,
+    TokType_StarEq,
+    TokType_SlashEq,
+    TokType_Pipe,
+    TokType_Amp,
+    TokType_Caret,
+    TokType_Tilde,
+    TokType_PlusPlus,
+    TokType_MinusMinus,
+    TokType_EOF,
+    TokType_NewLine,
+    TokType_ErrorTok,
+} TokType;
 typedef char* cstr;
 
+void* HeapAllocator_alloc(HeapAllocator* self, size_t size);
+void* HeapAllocator_calloc(HeapAllocator* self, size_t count, size_t size);
+void* HeapAllocator_realloc(HeapAllocator* self, void* ptr, size_t size);
+void HeapAllocator_free(HeapAllocator* self, void* ptr);
+Literal Literal_integer(int64_t i);
+Literal Literal_uinteger(uint64_t u);
+Literal Literal_floating(double f);
+Literal Literal_character(char c);
+Literal Literal_str(String s);
+Literal Literal_boolean(int b);
+void Literal_delete(Literal* self);
+Literal Literal_clone(Literal* self);
+Span Span_new(String f);
+Span Span_clone(Span* self);
+void Span_delete(Span* self);
+Token Token_new(Span s, TokType t, String lex);
+void Token_delete(Token* self);
+Token Token_clone(Token* self);
+Result_TokType_char_ptr Result_TokType_char_ptr_ok(TokType val);
+Result_TokType_char_ptr Result_TokType_char_ptr_err(char* val);
+int Result_TokType_char_ptr_is_ok(Result_TokType_char_ptr* self);
+int Result_TokType_char_ptr_is_err(Result_TokType_char_ptr* self);
+hashmap_char_ptr_TokType hashmap_char_ptr_TokType_new(size_t (*hfn)(const char*), int (*efn)(const char*, const char*), void (*kfree)(const char*), void (*vfree)(TokType));
+void hashmap_char_ptr_TokType_free(hashmap_char_ptr_TokType* self);
+int hashmap_char_ptr_TokType_insert(hashmap_char_ptr_TokType* self, const char* key, TokType val);
+Result_TokType_char_ptr hashmap_char_ptr_TokType_get(hashmap_char_ptr_TokType* self, const char* key);
+TokType* hashmap_char_ptr_TokType_get_ptr(hashmap_char_ptr_TokType* self, const char* key);
+int hashmap_char_ptr_TokType_contains(hashmap_char_ptr_TokType* self, const char* key);
+int hashmap_char_ptr_TokType_remove(hashmap_char_ptr_TokType* self, const char* key);
+size_t hashmap_char_ptr_TokType_count(hashmap_char_ptr_TokType* self);
+size_t hashmap_char_ptr_TokType__find_slot(hashmap_char_ptr_TokType* self, const char* key);
+size_t hashmap_char_ptr_TokType__lookup(hashmap_char_ptr_TokType* self, const char* key);
+void hashmap_char_ptr_TokType__resize(hashmap_char_ptr_TokType* self, size_t new_cap);
+void wordstore_delete(wordstore* self);
+vector_Token vector_Token_new(size_t init_cap);
+vector_Token vector_Token_with_allocator(size_t init_cap, HeapAllocator a);
+void vector_Token_delete(vector_Token* self);
+void vector_Token_push(vector_Token* self, Token val);
+Token* vector_Token_get(vector_Token* self, size_t i);
+void vector_Token_set(vector_Token* self, size_t i, Token val);
+Token vector_Token_pop(vector_Token* self);
+void vector_Token_clear(vector_Token* self);
+Lexer Lexer_new(String source, String filename);
+void Lexer_delete(Lexer* self);
+vector_Token* Lexer_scan_tokens(Lexer* self);
+void Lexer__scan_token(Lexer* self);
+char Lexer__advance(Lexer* self);
+int Lexer__match(Lexer* self, char expected);
+char Lexer__peek(Lexer* self);
+void Lexer__number(Lexer* self);
+char Lexer__peek_next(Lexer* self);
+void Lexer__string(Lexer* self);
+int Lexer__is_at_end(Lexer* self);
+Span Lexer__make_span(Lexer* self);
+void Lexer__add_token(Lexer* self, TokType t);
+String Lexer__get_lexeme(Lexer* self);
+int Lexer__is_digit(Lexer* self, char c);
+int Lexer__is_alpha(Lexer* self, char c);
+void Lexer__identifier(Lexer* self);
+void Lexer__parse_dollar(Lexer* self);
+File File_wrap(FILE* f, int owned);
+void File_close(File* self);
+int File_write_cstr(File* self, const char* s);
+int File_write_str(File* self, const String* s);
+int File_read_line(File* self, char* buf, int32_t cap);
+String File_read_all(File* self);
+void File_flush(File* self);
+int File_eof(File* self);
+int64_t File_tell(File* self);
+int File_seek(File* self, int64_t offset, int32_t whence);
+Result_File_char_ptr Result_File_char_ptr_ok(File val);
+Result_File_char_ptr Result_File_char_ptr_err(char* val);
+int Result_File_char_ptr_is_ok(Result_File_char_ptr* self);
+int Result_File_char_ptr_is_err(Result_File_char_ptr* self);
+Result_String_char_ptr Result_String_char_ptr_ok(String val);
+Result_String_char_ptr Result_String_char_ptr_err(char* val);
+int Result_String_char_ptr_is_ok(Result_String_char_ptr* self);
+int Result_String_char_ptr_is_err(Result_String_char_ptr* self);
+StringStorage StringStorage_lit(const char* l);
+StringStorage StringStorage_buf(char* b);
+String String_from(const char* s);
+String String_lit(const char* s);
+String String_with_cap(size_t cap);
+void String_drop(String* self);
+const char* String_ptr(String* self);
+int String_eq(String* self, const String* other);
+int String_eq_cstr(String* self, const char* s);
+void String_append(String* self, const String* other);
+void String_clear(String* self);
+char String_at(String* self, size_t i);
+String String_clone(String* self);
+String String_from_range(const char* src, size_t len);
+char* String__mut_ptr(String* self);
+void String__promote_to_buffer(String* self, size_t target_cap);
+void String__grow(String* self, size_t needed_len);
+size_t hash_i32(int32_t key);
+size_t hash_u32(uint32_t key);
+size_t hash_usize(size_t key);
+size_t hash_cstr(const char* key);
+int eq_i32(int32_t a, int32_t b);
+int eq_u32(uint32_t a, uint32_t b);
+int eq_usize(size_t a, size_t b);
+int eq_cstr(const char* a, const char* b);
+void free_cstr(const char* s);
+size_t hash_string(String s);
+int eq_string(String a, String b);
+void free_string(String s);
+wordstore kw_init(void);
+Result_File_char_ptr file_open(const char* path, const char* mode);
+Result_File_char_ptr file_open_read(const char* path);
+Result_File_char_ptr file_open_write(const char* path);
+Result_File_char_ptr file_open_append(const char* path);
+Result_String_char_ptr io_read_file(const char* path);
+int io_write_file(const char* path, const String* content);
 int32_t main(int32_t argc, cstr* argv);
 
+typedef enum {
+    StringStorage_literal_,
+    StringStorage_buffer_,
+} StringStorage_tag_;
+
+struct StringStorage_s {
+    StringStorage_tag_ tag_;
+    union {
+        const char* literal;
+        char* buffer;
+    };
+};
+
+StringStorage StringStorage_lit(const char* l) {
+    return (StringStorage){.tag_ = StringStorage_literal_, .literal = l};
+}
+StringStorage StringStorage_buf(char* b) {
+    return (StringStorage){.tag_ = StringStorage_buffer_, .buffer = b};
+}
+
+struct String_s {
+    StringStorage storage;
+    size_t length;
+    size_t cap;
+};
+
+String String_from(const char* s) {
+    if ((s == NULL)) {
+        return (String){StringStorage_lit(NULL), 0, 0};
+    }
+    size_t len = strlen(s);
+    char* p = malloc((len + 1));
+    assert((p != NULL));
+    memcpy(p, s, (len + 1));
+    return (String){StringStorage_buf(p), len, len};
+}
+String String_lit(const char* s) {
+    if ((s == NULL)) {
+        return (String){StringStorage_lit(NULL), 0, 0};
+    }
+    return (String){StringStorage_lit(s), strlen(s), 0};
+}
+String String_with_cap(size_t cap) {
+    char* p = malloc((cap + 1));
+    assert((p != NULL));
+    p[0] = 0;
+    return (String){StringStorage_buf(p), 0, cap};
+}
+void String_drop(String* self) {
+    if (((self->storage.tag_ == StringStorage_buffer_) && (self->storage.buffer != NULL))) {
+        free(((void*)self->storage.buffer));
+    }
+    self->storage = StringStorage_lit(NULL);
+    self->length = 0;
+    self->cap = 0;
+}
+const char* String_ptr(String* self) {
+    if ((self->storage.tag_ == StringStorage_buffer_)) {
+        return ((self->storage.buffer == NULL) ? "" : self->storage.buffer);
+    }
+    return ((self->storage.literal == NULL) ? "" : self->storage.literal);
+}
+int String_eq(String* self, const String* other) {
+    if ((self->length != other->length)) {
+        return 0;
+    }
+    if ((self->length == 0)) {
+        return 1;
+    }
+    return (memcmp(String_ptr(self), String_ptr(other), self->length) == 0);
+}
+int String_eq_cstr(String* self, const char* s) {
+    if ((s == NULL)) {
+        return (self->length == 0);
+    }
+    if ((strlen(s) != self->length)) {
+        return 0;
+    }
+    return (strcmp(String_ptr(self), s) == 0);
+}
+void String_append(String* self, const String* other) {
+    if ((other->length == 0)) {
+        return;
+    }
+    String__grow(self, (self->length + other->length));
+    char* dst = String__mut_ptr(self);
+    memcpy((dst + self->length), String_ptr(other), other->length);
+    self->length += other->length;
+    dst[self->length] = 0;
+}
+void String_clear(String* self) {
+    if ((self->storage.tag_ == StringStorage_literal_)) {
+        self->storage = StringStorage_lit("");
+        self->length = 0;
+        self->cap = 0;
+    } else {
+        if ((self->storage.buffer != NULL)) {
+            self->storage.buffer[0] = 0;
+            self->length = 0;
+        }
+    }
+}
+char String_at(String* self, size_t i) {
+    assert((i < self->length));
+    return String_ptr(self)[i];
+}
+String String_clone(String* self) {
+    return String_from(String_ptr(self));
+}
+String String_from_range(const char* src, size_t len) {
+    if ((src == NULL)) {
+        return (String){StringStorage_lit(NULL), 0, 0};
+    }
+    char* p = malloc((len + 1));
+    assert((p != NULL));
+    memcpy(p, src, len);
+    p[len] = 0;
+    return (String){StringStorage_buf(p), len, len};
+}
+char* String__mut_ptr(String* self) {
+    if ((self->storage.tag_ == StringStorage_literal_)) {
+        String__promote_to_buffer(self, self->length);
+    }
+    return self->storage.buffer;
+}
+void String__promote_to_buffer(String* self, size_t target_cap) {
+    const char* old_ptr = self->storage.literal;
+    char* new_buf = malloc((target_cap + 1));
+    assert((new_buf != NULL));
+    if (((old_ptr != NULL) && (self->length > 0))) {
+        memcpy(new_buf, old_ptr, self->length);
+    }
+    new_buf[self->length] = 0;
+    self->storage = StringStorage_buf(new_buf);
+    self->cap = target_cap;
+}
+void String__grow(String* self, size_t needed_len) {
+    if ((self->storage.tag_ == StringStorage_literal_)) {
+        String__promote_to_buffer(self, needed_len);
+        return;
+    }
+    if ((self->cap >= needed_len)) {
+        return;
+    }
+    size_t new_cap = ((self->cap == 0) ? needed_len : (self->cap * 2));
+    if ((new_cap < needed_len)) {
+        new_cap = needed_len;
+    }
+    char* p = realloc(((void*)self->storage.buffer), (new_cap + 1));
+    assert((p != NULL));
+    self->storage = StringStorage_buf(p);
+    self->cap = new_cap;
+}
+
+/* $interface Allocator — compile-time contract only, no C output */
+
+struct HeapAllocator_s {
+};
+
+void* HeapAllocator_alloc(HeapAllocator* self, size_t size) {
+    return malloc(size);
+}
+void* HeapAllocator_calloc(HeapAllocator* self, size_t count, size_t size) {
+    return calloc(count, size);
+}
+void* HeapAllocator_realloc(HeapAllocator* self, void* ptr, size_t size) {
+    return realloc(ptr, size);
+}
+void HeapAllocator_free(HeapAllocator* self, void* ptr) {
+    free(ptr);
+}
+
+
+typedef enum {
+    Literal_integer_,
+    Literal_uinteger_,
+    Literal_floating_,
+    Literal_boolean_,
+    Literal_character_,
+    Literal_str_,
+} Literal_tag_;
+
+struct Literal_s {
+    Literal_tag_ tag_;
+    union {
+        int64_t integer;
+        uint64_t uinteger;
+        double floating;
+        int boolean;
+        char character;
+        String str;
+    };
+};
+
+Literal Literal_integer(int64_t i) {
+    return (Literal){.tag_ = Literal_integer_, .integer = i};
+}
+Literal Literal_uinteger(uint64_t u) {
+    return (Literal){.tag_ = Literal_uinteger_, .uinteger = u};
+}
+Literal Literal_floating(double f) {
+    return (Literal){.tag_ = Literal_floating_, .floating = f};
+}
+Literal Literal_character(char c) {
+    return (Literal){.tag_ = Literal_character_, .character = c};
+}
+Literal Literal_str(String s) {
+    return (Literal){.tag_ = Literal_str_, .str = String_clone(&s)};
+}
+Literal Literal_boolean(int b) {
+    return (Literal){.tag_ = Literal_boolean_, .boolean = b};
+}
+void Literal_delete(Literal* self) {
+    if ((self->tag_ == Literal_str_)) {
+        String_drop((&self->str));
+    }
+}
+Literal Literal_clone(Literal* self) {
+    if ((self->tag_ == Literal_str_)) {
+        String copy = self->str;
+        return (Literal){.tag_ = self->tag_, .str = String_clone(&copy)};
+    } else {
+        return (*self);
+    }
+}
+
+struct Span_s {
+    String filename;
+    size_t row;
+    size_t col;
+};
+
+Span Span_new(String f) {
+    return (Span){f, 0, 0};
+}
+Span Span_clone(Span* self) {
+    return (Span){String_clone(&self->filename), self->row, self->col};
+}
+void Span_delete(Span* self) {
+    String_drop((&self->filename));
+}
+
+
+struct Token_s {
+    Span span;
+    TokType tok_type;
+    String lexeme;
+};
+
+Token Token_new(Span s, TokType t, String lex) {
+    return (Token){s, t, lex};
+}
+void Token_delete(Token* self) {
+    String_drop(&self->lexeme);
+}
+Token Token_clone(Token* self) {
+    return (Token){Span_clone(&self->span), self->tok_type, String_clone(&self->lexeme)};
+}
+
+typedef enum {
+    Result_ok_,
+    Result_err_,
+} Result_tag_;
+
+struct Result_TokType_char_ptr_s {
+    Result_tag_ tag_;
+    union {
+        TokType ok;
+        char* err;
+    };
+};
+
+Result_TokType_char_ptr Result_TokType_char_ptr_ok(TokType val) {
+    Result_TokType_char_ptr r;
+    r.tag_ = Result_ok_;
+    r.ok = val;
+    return r;
+}
+Result_TokType_char_ptr Result_TokType_char_ptr_err(char* val) {
+    Result_TokType_char_ptr r;
+    r.tag_ = Result_err_;
+    r.err = val;
+    return r;
+}
+int Result_TokType_char_ptr_is_ok(Result_TokType_char_ptr* self) {
+    return (self->tag_ == Result_ok_);
+}
+int Result_TokType_char_ptr_is_err(Result_TokType_char_ptr* self) {
+    return (self->tag_ == Result_err_);
+}
+
+struct hashmap_char_ptr_TokType_s {
+    char** keys;
+    TokType* vals;
+    uint8_t* states;
+    size_t cap;
+    size_t len;
+    size_t tombstones;
+    size_t (*hash_fn)(const char*);
+    int (*eq_fn)(const char*, const char*);
+    void (*free_key)(const char*);
+    void (*free_val)(TokType);
+};
+
+hashmap_char_ptr_TokType hashmap_char_ptr_TokType_new(size_t (*hfn)(const char*), int (*efn)(const char*, const char*), void (*kfree)(const char*), void (*vfree)(TokType)) {
+    size_t init_cap = 16;
+    char** ks = malloc((init_cap * sizeof(const char*)));
+    TokType* vs = malloc((init_cap * sizeof(TokType)));
+    uint8_t* st = calloc(init_cap, sizeof(uint8_t));
+    return (hashmap_char_ptr_TokType){ks, vs, st, init_cap, 0, 0, hfn, efn, kfree, vfree};
+}
+void hashmap_char_ptr_TokType_free(hashmap_char_ptr_TokType* self) {
+    if ((!self->keys)) {
+        return;
+    }
+    for (size_t i = 0; (i < self->cap); (i++)) {
+        if ((self->states[i] == EntryState_Occupied)) {
+            if (self->free_key) {
+                (self->free_key)(self->keys[i]);
+            }
+            if (self->free_val) {
+                (self->free_val)(self->vals[i]);
+            }
+        }
+    }
+    free(self->keys);
+    free(self->vals);
+    free(self->states);
+    self->keys = NULL;
+    self->vals = NULL;
+    self->states = NULL;
+}
+int hashmap_char_ptr_TokType_insert(hashmap_char_ptr_TokType* self, const char* key, TokType val) {
+    if (((((self->len + self->tombstones) + 1) * 4) >= (self->cap * 3))) {
+        hashmap_char_ptr_TokType__resize(self, (self->cap * 2));
+    }
+    size_t slot = hashmap_char_ptr_TokType__find_slot(self, key);
+    int is_new = (self->states[slot] != EntryState_Occupied);
+    if ((self->states[slot] == EntryState_Tombstone)) {
+        (self->tombstones--);
+    }
+    self->keys[slot] = key;
+    self->vals[slot] = val;
+    self->states[slot] = EntryState_Occupied;
+    if (is_new) {
+        (self->len++);
+    }
+    return is_new;
+}
+Result_TokType_char_ptr hashmap_char_ptr_TokType_get(hashmap_char_ptr_TokType* self, const char* key) {
+    size_t slot = hashmap_char_ptr_TokType__lookup(self, key);
+    if ((slot == self->cap)) {
+        return Result_TokType_char_ptr_err("not found");
+    }
+    return Result_TokType_char_ptr_ok(self->vals[slot]);
+}
+TokType* hashmap_char_ptr_TokType_get_ptr(hashmap_char_ptr_TokType* self, const char* key) {
+    size_t slot = hashmap_char_ptr_TokType__lookup(self, key);
+    if ((slot == self->cap)) {
+        return NULL;
+    }
+    return (&self->vals[slot]);
+}
+int hashmap_char_ptr_TokType_contains(hashmap_char_ptr_TokType* self, const char* key) {
+    return (hashmap_char_ptr_TokType__lookup(self, key) != self->cap);
+}
+int hashmap_char_ptr_TokType_remove(hashmap_char_ptr_TokType* self, const char* key) {
+    size_t slot = hashmap_char_ptr_TokType__lookup(self, key);
+    if ((slot == self->cap)) {
+        return 0;
+    }
+    if (self->free_key) {
+        (self->free_key)(self->keys[slot]);
+    }
+    if (self->free_val) {
+        (self->free_val)(self->vals[slot]);
+    }
+    self->states[slot] = EntryState_Tombstone;
+    (self->tombstones++);
+    (self->len--);
+    return 1;
+}
+size_t hashmap_char_ptr_TokType_count(hashmap_char_ptr_TokType* self) {
+    return self->len;
+}
+size_t hashmap_char_ptr_TokType__find_slot(hashmap_char_ptr_TokType* self, const char* key) {
+    size_t mask = (self->cap - 1);
+    size_t idx = ((self->hash_fn)(key) & mask);
+    size_t tombstone = self->cap;
+    for (size_t i = 0; (i < self->cap); (i++)) {
+        size_t slot = ((idx + i) & mask);
+        if ((self->states[slot] == EntryState_Empty)) {
+            return ((tombstone != self->cap) ? tombstone : slot);
+        }
+        if ((self->states[slot] == EntryState_Tombstone)) {
+            if ((tombstone == self->cap)) {
+                tombstone = slot;
+            }
+        } else {
+            if ((self->eq_fn)(self->keys[slot], key)) {
+                return slot;
+            }
+        }
+    }
+    return ((tombstone != self->cap) ? tombstone : self->cap);
+}
+size_t hashmap_char_ptr_TokType__lookup(hashmap_char_ptr_TokType* self, const char* key) {
+    size_t mask = (self->cap - 1);
+    size_t idx = ((self->hash_fn)(key) & mask);
+    for (size_t i = 0; (i < self->cap); (i++)) {
+        size_t slot = ((idx + i) & mask);
+        if ((self->states[slot] == EntryState_Empty)) {
+            return self->cap;
+        }
+        if ((self->states[slot] == EntryState_Occupied)) {
+            if ((self->eq_fn)(self->keys[slot], key)) {
+                return slot;
+            }
+        }
+    }
+    return self->cap;
+}
+void hashmap_char_ptr_TokType__resize(hashmap_char_ptr_TokType* self, size_t new_cap) {
+    char** new_keys = malloc((new_cap * sizeof(const char*)));
+    TokType* new_vals = malloc((new_cap * sizeof(TokType)));
+    uint8_t* new_states = calloc(new_cap, sizeof(uint8_t));
+    size_t mask = (new_cap - 1);
+    for (size_t i = 0; (i < self->cap); (i++)) {
+        if ((self->states[i] != EntryState_Occupied)) {
+            continue;
+        }
+        size_t idx = ((self->hash_fn)(self->keys[i]) & mask);
+        for (size_t j = 0; (j < new_cap); (j++)) {
+            size_t slot = ((idx + j) & mask);
+            if ((new_states[slot] == EntryState_Empty)) {
+                new_keys[slot] = self->keys[i];
+                new_vals[slot] = self->vals[i];
+                new_states[slot] = EntryState_Occupied;
+                break;
+            }
+        }
+    }
+    free(self->keys);
+    free(self->vals);
+    free(self->states);
+    self->keys = new_keys;
+    self->vals = new_vals;
+    self->states = new_states;
+    self->cap = new_cap;
+    self->tombstones = 0;
+}
+
+struct wordstore_s {
+    hashmap_char_ptr_TokType words;
+    hashmap_char_ptr_TokType directives;
+};
+
+void wordstore_delete(wordstore* self) {
+    hashmap_char_ptr_TokType_free((&self->words));
+    hashmap_char_ptr_TokType_free((&self->directives));
+}
+
+struct vector_Token_s {
+    Token* data;
+    size_t len;
+    size_t cap;
+    HeapAllocator alloc;
+};
+
+vector_Token vector_Token_new(size_t init_cap) {
+    HeapAllocator a;
+    Token* buf = NULL;
+    if ((init_cap > 0)) {
+        buf = HeapAllocator_alloc(&a, (init_cap * sizeof(Token)));
+    }
+    return (vector_Token){buf, 0, init_cap, a};
+}
+vector_Token vector_Token_with_allocator(size_t init_cap, HeapAllocator a) {
+    Token* buf = NULL;
+    if ((init_cap > 0)) {
+        buf = HeapAllocator_alloc(&a, (init_cap * sizeof(Token)));
+    }
+    return (vector_Token){buf, 0, init_cap, a};
+}
+void vector_Token_delete(vector_Token* self) {
+    if (self->data) {
+        for (size_t i = 0; (i < self->len); (i++)) {
+            Token_delete(&self->data[i]);
+        }
+        HeapAllocator_free(&self->alloc, self->data);
+        self->data = NULL;
+    }
+}
+void vector_Token_push(vector_Token* self, Token val) {
+    if ((self->len >= self->cap)) {
+        self->cap = ((self->cap == 0) ? 8 : (self->cap * 2));
+        self->data = HeapAllocator_realloc(&self->alloc, self->data, (self->cap * sizeof(Token)));
+    }
+    self->data[(self->len++)] = val;
+}
+Token* vector_Token_get(vector_Token* self, size_t i) {
+    assert((i < self->len));
+    return &(self->data[i]);
+}
+void vector_Token_set(vector_Token* self, size_t i, Token val) {
+    assert((i < self->len));
+    self->data[i] = val;
+}
+Token vector_Token_pop(vector_Token* self) {
+    assert((self->len > 0));
+    return self->data[(--self->len)];
+}
+void vector_Token_clear(vector_Token* self) {
+    self->len = 0;
+}
+
+struct Lexer_s {
+    String source;
+    vector_Token tokens;
+    size_t start;
+    size_t current;
+    size_t line;
+    size_t col;
+    String filename;
+    wordstore store;
+};
+
+Lexer Lexer_new(String source, String filename) {
+    return (Lexer){source, vector_Token_new(32), 0, 0, 1, 1, filename, kw_init()};
+}
+void Lexer_delete(Lexer* self) {
+    String_drop(&self->source);
+    vector_Token_delete(&self->tokens);
+    String_drop(&self->filename);
+    wordstore_delete(&self->store);
+}
+vector_Token* Lexer_scan_tokens(Lexer* self) {
+    while ((!Lexer__is_at_end(self))) {
+        self->start = self->current;
+        Lexer__scan_token(self);
+    }
+    vector_Token_push(&self->tokens, Token_new(Lexer__make_span(self), TokType_EOF, String_lit("")));
+    return &(self->tokens);
+}
+void Lexer__scan_token(Lexer* self) {
+    char c = Lexer__advance(self);
+    switch (c) {
+        case '(':
+            Lexer__add_token(self, TokType_LParen);
+            break;
+        case ')':
+            Lexer__add_token(self, TokType_RParen);
+            break;
+        case '{':
+            Lexer__add_token(self, TokType_LBrace);
+            break;
+        case '}':
+            Lexer__add_token(self, TokType_RBrace);
+            break;
+        case '[':
+            Lexer__add_token(self, TokType_LBracket);
+            break;
+        case ']':
+            Lexer__add_token(self, TokType_RBracket);
+            break;
+        case ';':
+            Lexer__add_token(self, TokType_Semi);
+            break;
+        case ',':
+            Lexer__add_token(self, TokType_Comma);
+            break;
+        case '.':
+            Lexer__add_token(self, TokType_Dot);
+            break;
+        case '-':
+            Lexer__add_token(self, (Lexer__match(self, '>') ? TokType_Arrow : TokType_Minus));
+            break;
+        case '+':
+            Lexer__add_token(self, (Lexer__match(self, '+') ? TokType_PlusPlus : TokType_Plus));
+            break;
+        case '$':
+            Lexer__parse_dollar(self);
+            break;
+        case '=':
+            Lexer__add_token(self, (Lexer__match(self, '=') ? TokType_Eq : TokType_Assign));
+            break;
+        case '!':
+            Lexer__add_token(self, (Lexer__match(self, '=') ? TokType_Neq : TokType_Bang));
+            break;
+        case '/':
+            if (Lexer__match(self, '/')) {
+                while (((Lexer__peek(self) != '\n') && (!Lexer__is_at_end(self)))) {
+                    Lexer__advance(self);
+                }
+            } else {
+                Lexer__add_token(self, TokType_Slash);
+            }
+            break;
+        case ' ':
+        case '\r':
+        case '\t':
+            (self->col++);
+            break;
+        case '\n':
+            (self->line++);
+            self->col = 1;
+            Lexer__add_token(self, TokType_NewLine);
+            break;
+        case '\"':
+            Lexer__string(self);
+            break;
+        default:
+            if (Lexer__is_digit(self, c)) {
+                Lexer__number(self);
+            } else {
+                if (Lexer__is_alpha(self, c)) {
+                    Lexer__identifier(self);
+                } else {
+                    Lexer__add_token(self, TokType_ErrorTok);
+                }
+            }
+            break;
+    }
+}
+char Lexer__advance(Lexer* self) {
+    char c = String_at(&self->source, (self->current++));
+    (self->col++);
+    return c;
+}
+int Lexer__match(Lexer* self, char expected) {
+    if (Lexer__is_at_end(self)) {
+        return 0;
+    }
+    if ((String_at(&self->source, self->current) != expected)) {
+        return 0;
+    }
+    (self->current++);
+    (self->col++);
+    return 1;
+}
+char Lexer__peek(Lexer* self) {
+    if (Lexer__is_at_end(self)) {
+        return '\0';
+    }
+    return String_at(&self->source, self->current);
+}
+void Lexer__number(Lexer* self) {
+    while (Lexer__is_digit(self, Lexer__peek(self))) {
+        Lexer__advance(self);
+    }
+    if (((Lexer__peek(self) == '.') && Lexer__is_digit(self, Lexer__peek_next(self)))) {
+        Lexer__advance(self);
+        while (Lexer__is_digit(self, Lexer__peek(self))) {
+            Lexer__advance(self);
+        }
+        Lexer__add_token(self, TokType_FloatLit);
+    } else {
+        Lexer__add_token(self, TokType_IntLit);
+    }
+}
+char Lexer__peek_next(Lexer* self) {
+    if (((self->current + 1) >= self->source.length)) {
+        return '\0';
+    }
+    return String_at(&self->source, (self->current + 1));
+}
+void Lexer__string(Lexer* self) {
+    while (((Lexer__peek(self) != '\"') && (!Lexer__is_at_end(self)))) {
+        if ((Lexer__peek(self) == '\n')) {
+            (self->line++);
+            self->col = 1;
+        }
+        Lexer__advance(self);
+    }
+    if (Lexer__is_at_end(self)) {
+        Lexer__add_token(self, TokType_ErrorTok);
+        return;
+    }
+    Lexer__advance(self);
+    String value = String_from_range(((String_ptr(&self->source) + self->start) + 1), ((self->current - self->start) - 2));
+    vector_Token_push(&self->tokens, Token_new(Lexer__make_span(self), TokType_StringLit, String_clone(&value)));
+    String_drop(&value);
+}
+int Lexer__is_at_end(Lexer* self) {
+    return (self->current >= self->source.length);
+}
+Span Lexer__make_span(Lexer* self) {
+    return (Span){self->filename, self->line, (self->col - (self->current - self->start))};
+}
+void Lexer__add_token(Lexer* self, TokType t) {
+    String text = Lexer__get_lexeme(self);
+    vector_Token_push(&self->tokens, Token_new(Lexer__make_span(self), t, String_clone(&text)));
+    String_drop(&text);
+}
+String Lexer__get_lexeme(Lexer* self) {
+    return String_from_range((String_ptr(&self->source) + self->start), (self->current - self->start));
+}
+int Lexer__is_digit(Lexer* self, char c) {
+    return ((c >= '0') && (c <= '9'));
+}
+int Lexer__is_alpha(Lexer* self, char c) {
+    return ((((c >= 'a') && (c <= 'z')) || ((c >= 'A') && (c <= 'Z'))) || (c == '_'));
+}
+void Lexer__identifier(Lexer* self) {
+    while ((Lexer__is_alpha(self, Lexer__peek(self)) || Lexer__is_digit(self, Lexer__peek(self)))) {
+        Lexer__advance(self);
+    }
+    String text = Lexer__get_lexeme(self);
+    Result_TokType_char_ptr type_tok = hashmap_char_ptr_TokType_get(&self->store.words, String_ptr(&text));
+    switch (type_tok.tag_) {
+        case Result_ok_: {
+            TokType t = type_tok.ok;
+            Lexer__add_token(self, t);
+            break;
+            break;
+        }
+        case Result_err_: {
+            char* e = type_tok.err;
+            Lexer__add_token(self, TokType_Ident);
+            break;
+            break;
+        }
+    }
+    String_drop(&text);
+}
+void Lexer__parse_dollar(Lexer* self) {
+    if (Lexer__is_alpha(self, Lexer__peek(self))) {
+        while ((Lexer__is_alpha(self, Lexer__peek(self)) || Lexer__is_digit(self, Lexer__peek(self)))) {
+            Lexer__advance(self);
+        }
+        String directive_name = String_from_range(((String_ptr(&self->source) + self->start) + 1), ((self->current - self->start) - 1));
+        Result_TokType_char_ptr type_tok = hashmap_char_ptr_TokType_get(&self->store.directives, String_ptr(&directive_name));
+        switch (type_tok.tag_) {
+            case Result_ok_: {
+                TokType t = type_tok.ok;
+                Lexer__add_token(self, t);
+                break;
+                break;
+            }
+            case Result_err_: {
+                char* e = type_tok.err;
+                Lexer__add_token(self, TokType_Dollar);
+                break;
+                break;
+            }
+        }
+        String_drop(&directive_name);
+    } else {
+        Lexer__add_token(self, TokType_Dollar);
+    }
+}
+
+struct File_s {
+    FILE* handle;
+    int owned;
+};
+
+File File_wrap(FILE* f, int owned) {
+    return (File){f, owned};
+}
+void File_close(File* self) {
+    if ((self->owned && self->handle)) {
+        fclose(self->handle);
+        self->handle = NULL;
+    }
+}
+int File_write_cstr(File* self, const char* s) {
+    return (fputs(s, self->handle) >= 0);
+}
+int File_write_str(File* self, const String* s) {
+    size_t written = fwrite(String_ptr(s), 1, s->length, self->handle);
+    return (written == s->length);
+}
+int File_read_line(File* self, char* buf, int32_t cap) {
+    return (fgets(buf, cap, self->handle) != NULL);
+}
+String File_read_all(File* self) {
+    fseek(self->handle, 0, SEEK_END);
+    int64_t size = ftell(self->handle);
+    rewind(self->handle);
+    if ((size <= 0)) {
+        return String_from(NULL);
+    }
+    String buf = String_with_cap(((size_t)size));
+    size_t n = fread(buf.storage.buffer, 1, ((size_t)size), self->handle);
+    buf.storage.buffer[n] = 0;
+    buf.length = n;
+    return buf;
+}
+void File_flush(File* self) {
+    fflush(self->handle);
+}
+int File_eof(File* self) {
+    return (feof(self->handle) != 0);
+}
+int64_t File_tell(File* self) {
+    return ftell(self->handle);
+}
+int File_seek(File* self, int64_t offset, int32_t whence) {
+    return (fseek(self->handle, offset, whence) == 0);
+}
+
+struct Result_File_char_ptr_s {
+    Result_tag_ tag_;
+    union {
+        File ok;
+        char* err;
+    };
+};
+
+Result_File_char_ptr Result_File_char_ptr_ok(File val) {
+    Result_File_char_ptr r;
+    r.tag_ = Result_ok_;
+    r.ok = val;
+    return r;
+}
+Result_File_char_ptr Result_File_char_ptr_err(char* val) {
+    Result_File_char_ptr r;
+    r.tag_ = Result_err_;
+    r.err = val;
+    return r;
+}
+int Result_File_char_ptr_is_ok(Result_File_char_ptr* self) {
+    return (self->tag_ == Result_ok_);
+}
+int Result_File_char_ptr_is_err(Result_File_char_ptr* self) {
+    return (self->tag_ == Result_err_);
+}
+
+struct Result_String_char_ptr_s {
+    Result_tag_ tag_;
+    union {
+        String ok;
+        char* err;
+    };
+};
+
+Result_String_char_ptr Result_String_char_ptr_ok(String val) {
+    Result_String_char_ptr r;
+    r.tag_ = Result_ok_;
+    r.ok = val;
+    return r;
+}
+Result_String_char_ptr Result_String_char_ptr_err(char* val) {
+    Result_String_char_ptr r;
+    r.tag_ = Result_err_;
+    r.err = val;
+    return r;
+}
+int Result_String_char_ptr_is_ok(Result_String_char_ptr* self) {
+    return (self->tag_ == Result_ok_);
+}
+int Result_String_char_ptr_is_err(Result_String_char_ptr* self) {
+    return (self->tag_ == Result_err_);
+}
+
+
+size_t hash_i32(int32_t key) {
+    size_t k = ((size_t)key);
+    k = (((k >> 16) ^ k) * 73244475);
+    k = (((k >> 16) ^ k) * 73244475);
+    k = ((k >> 16) ^ k);
+    return k;
+}
+
+size_t hash_u32(uint32_t key) {
+    size_t k = ((size_t)key);
+    k = (((k >> 16) ^ k) * 73244475);
+    k = (((k >> 16) ^ k) * 73244475);
+    k = ((k >> 16) ^ k);
+    return k;
+}
+
+size_t hash_usize(size_t key) {
+    key = (((key >> 30) ^ key) * 13787848793156543929UL);
+    key = (((key >> 27) ^ key) * 10723151780598845931UL);
+    key = ((key >> 31) ^ key);
+    return key;
+}
+
+size_t hash_cstr(const char* key) {
+    size_t h = 14695981039346656037UL;
+    const char* p = key;
+    while (p[0]) {
+        h = (h ^ ((size_t)p[0]));
+        h = (h * 1099511628211);
+        p = (p + 1);
+    }
+    return h;
+}
+
+int eq_i32(int32_t a, int32_t b) {
+    return (a == b);
+}
+
+int eq_u32(uint32_t a, uint32_t b) {
+    return (a == b);
+}
+
+int eq_usize(size_t a, size_t b) {
+    return (a == b);
+}
+
+int eq_cstr(const char* a, const char* b) {
+    return (strcmp(a, b) == 0);
+}
+
+void free_cstr(const char* s) {
+    free(((void*)s));
+}
+
+size_t hash_string(String s) {
+    return hash_cstr(String_ptr(&s));
+}
+
+int eq_string(String a, String b) {
+    return String_eq(&a, &b);
+}
+
+void free_string(String s) {
+    String_drop(&s);
+}
+
+wordstore kw_init(void) {
+    hashmap_char_ptr_TokType words = hashmap_char_ptr_TokType_new(hash_cstr, eq_cstr, NULL, NULL);
+    hashmap_char_ptr_TokType directives = hashmap_char_ptr_TokType_new(hash_cstr, eq_cstr, NULL, NULL);
+    hashmap_char_ptr_TokType_insert(&words, "fn", TokType_Fn);
+    hashmap_char_ptr_TokType_insert(&words, "struct", TokType_Struct);
+    hashmap_char_ptr_TokType_insert(&words, "union", TokType_Union);
+    hashmap_char_ptr_TokType_insert(&words, "enum", TokType_Enum);
+    hashmap_char_ptr_TokType_insert(&words, "return", TokType_Return);
+    hashmap_char_ptr_TokType_insert(&words, "if", TokType_If);
+    hashmap_char_ptr_TokType_insert(&words, "else", TokType_Else);
+    hashmap_char_ptr_TokType_insert(&words, "for", TokType_For);
+    hashmap_char_ptr_TokType_insert(&words, "while", TokType_While);
+    hashmap_char_ptr_TokType_insert(&words, "break", TokType_Break);
+    hashmap_char_ptr_TokType_insert(&words, "continue", TokType_Continue);
+    hashmap_char_ptr_TokType_insert(&words, "switch", TokType_Switch);
+    hashmap_char_ptr_TokType_insert(&words, "case", TokType_Case);
+    hashmap_char_ptr_TokType_insert(&words, "default", TokType_Default);
+    hashmap_char_ptr_TokType_insert(&words, "let", TokType_Let);
+    hashmap_char_ptr_TokType_insert(&words, "constexpr", TokType_ConstExpr);
+    hashmap_char_ptr_TokType_insert(&words, "typedef", TokType_TypeDef);
+    hashmap_char_ptr_TokType_insert(&words, "type", TokType_Type);
+    hashmap_char_ptr_TokType_insert(&words, "namespace", TokType_NameSpace);
+    hashmap_char_ptr_TokType_insert(&words, "auto", TokType_Auto);
+    hashmap_char_ptr_TokType_insert(&words, "sizeof", TokType_Sizeof);
+    hashmap_char_ptr_TokType_insert(&words, "lenof", TokType_Lenof);
+    hashmap_char_ptr_TokType_insert(&words, "self", TokType_Self_);
+    hashmap_char_ptr_TokType_insert(&words, "Self", TokType_SelfType);
+    hashmap_char_ptr_TokType_insert(&words, "assert", TokType_Assert);
+    hashmap_char_ptr_TokType_insert(&words, "true", TokType_True);
+    hashmap_char_ptr_TokType_insert(&words, "false", TokType_False);
+    hashmap_char_ptr_TokType_insert(&words, "null", TokType_Null);
+    hashmap_char_ptr_TokType_insert(&directives, "import", TokType_Import);
+    hashmap_char_ptr_TokType_insert(&directives, "template", TokType_Template);
+    hashmap_char_ptr_TokType_insert(&directives, "interface", TokType_Interface);
+    hashmap_char_ptr_TokType_insert(&directives, "implement", TokType_Implement);
+    hashmap_char_ptr_TokType_insert(&directives, "init", TokType_Init);
+    hashmap_char_ptr_TokType_insert(&directives, "dinit", TokType_Dinit);
+    hashmap_char_ptr_TokType_insert(&directives, "tag", TokType_Tag);
+    hashmap_char_ptr_TokType_insert(&directives, "if", TokType_ConstIf);
+    hashmap_char_ptr_TokType_insert(&directives, "scope", TokType_Scope);
+    hashmap_char_ptr_TokType_insert(&directives, "defer", TokType_Defer);
+    hashmap_char_ptr_TokType_insert(&directives, "include", TokType_Include);
+    hashmap_char_ptr_TokType_insert(&directives, "extern", TokType_Extern);
+    return (wordstore){words, directives};
+}
+
+Result_File_char_ptr file_open(const char* path, const char* mode) {
+    FILE* f = fopen(path, mode);
+    if ((f == NULL)) {
+        return Result_File_char_ptr_err("fopen failed");
+    }
+    return Result_File_char_ptr_ok(File_wrap(f, 1));
+}
+
+Result_File_char_ptr file_open_read(const char* path) {
+    return file_open(path, "r");
+}
+
+Result_File_char_ptr file_open_write(const char* path) {
+    return file_open(path, "w");
+}
+
+Result_File_char_ptr file_open_append(const char* path) {
+    return file_open(path, "a");
+}
+
+Result_String_char_ptr io_read_file(const char* path) {
+    Result_File_char_ptr r = file_open_read(path);
+    switch (r.tag_) {
+        case Result_err_: {
+            char* e = r.err;
+            return Result_String_char_ptr_err(e);
+            break;
+        }
+        case Result_ok_: {
+            File f = r.ok;
+            String s = File_read_all(&f);
+            Result_String_char_ptr _ck_ret = Result_String_char_ptr_ok(s);
+            File_close(&f);
+            return _ck_ret;
+            break;
+        }
+    }
+}
+
+int io_write_file(const char* path, const String* content) {
+    Result_File_char_ptr r = file_open_write(path);
+    switch (r.tag_) {
+        case Result_err_: {
+            char* e = r.err;
+            printf("io_write_file: %s\n", e);
+            return 0;
+            break;
+        }
+        case Result_ok_: {
+            File f = r.ok;
+            int _ck_ret = File_write_str(&f, content);
+            File_close(&f);
+            return _ck_ret;
+            break;
+        }
+    }
+}
 
 int32_t main(int32_t argc, cstr* argv) {
-    printf("Hello, world!\n");
+    String filename = String_lit(argv[1]);
+    String source;
+    Result_String_char_ptr read_string = io_read_file(String_ptr(&filename));
+    switch (read_string.tag_) {
+        case Result_ok_: {
+            String s = read_string.ok;
+            source = String_clone(&s);
+            String_drop(&s);
+            break;
+        }
+        case Result_err_: {
+            char* e = read_string.err;
+            printf("Error opening %s: %s\n", String_ptr(&filename), e);
+            String_drop(&source);
+            String_drop(&filename);
+            return 1;
+            break;
+        }
+    }
+    Lexer lexer = Lexer_new(String_clone(&source), String_clone(&filename));
+    vector_Token* tokens = Lexer_scan_tokens(&lexer);
+    Token tok;
+    for (size_t i = 0; (i < tokens->len); (i++)) {
+        tok = tokens->data[i];
+        printf("%s ", String_ptr(&tok.lexeme));
+    }
+    tok = Token_new(Span_new(filename), TokType_EOF, String_from(""));
+    Token_delete(&tok);
+    Lexer_delete(&lexer);
+    String_drop(&source);
+    String_drop(&filename);
     return 0;
 }

@@ -51,6 +51,10 @@ fn eq_i32(i32 a, i32 b) -> bool { return a == b; }
 fn eq_u32(u32 a, u32 b) -> bool { return a == b; }
 fn eq_usize(usize a, usize b) -> bool { return a == b; }
 fn eq_cstr(const char* a, const char* b) -> bool { return strcmp(a, b) == 0; }
+fn free_cstr(const char* s) {
+    free((void*)s);
+}
+
 
 $import "std/string.ck";
 
@@ -60,6 +64,10 @@ fn hash_string(String s) -> usize {
 
 fn eq_string(String a, String b) -> bool {
     return a.eq(b);
+}
+
+fn free_string(String s) -> void {
+    $dinit(s);
 }
 
 // Entry state
@@ -79,26 +87,43 @@ struct hashmap {
     usize tombstones;
     fn(K) -> usize         hash_fn;
     fn(K, K) -> bool       eq_fn;
+    fn(K) -> void free_key;
+    fn(V) -> void free_val;
 
-    fn $init new(fn(K) -> usize hfn, fn(K, K) -> bool efn) -> Self {
+    fn $init new(
+        fn(K) -> usize hfn, 
+        fn(K, K) -> bool efn,
+        fn(K) -> void kfree,
+        fn(V) -> void vfree
+    ) -> Self {
+        
         usize init_cap = 16;
+        
         K*  ks = malloc(init_cap * sizeof(K));
         V*  vs = malloc(init_cap * sizeof(V));
         u8* st = calloc(init_cap, sizeof(u8));  // all Empty (0)
-        return { ks, vs, st, init_cap, 0, 0, hfn, efn };
+        
+        return { ks, vs, st, init_cap, 0, 0, hfn, efn, kfree, vfree };
     }
 
     fn $dinit free() {
-        if (self.keys) {
-            free(self.keys);
-            free(self.vals);
-            free(self.states);
-            self.keys   = null;
-            self.vals   = null;
-            self.states = null;
-        }
-    }
+        if (!self.keys) return;
 
+        for (usize i = 0; i < self.cap; i++) {
+            if (self.states[i] == EntryState.Occupied) {
+                if (self.free_key) self.free_key(self.keys[i]);
+                if (self.free_val) self.free_val(self.vals[i]);
+            }
+        }
+
+        free(self.keys);
+        free(self.vals);
+        free(self.states);
+
+        self.keys   = null;
+        self.vals   = null;
+        self.states = null;
+    }
     // Insert or update. Returns true if inserted (new key), false if updated.
     fn insert(K key, V val) -> bool {
         // resize if load > 75%
@@ -141,9 +166,14 @@ struct hashmap {
     fn remove(K key) -> bool {
         usize slot = self._lookup(key);
         if (slot == self.cap) return false;
+
+        if (self.free_key) self.free_key(self.keys[slot]);
+        if (self.free_val) self.free_val(self.vals[slot]);
+
         self.states[slot] = EntryState.Tombstone;
         self.tombstones++;
         self.len--;
+
         return true;
     }
 
@@ -188,13 +218,17 @@ struct hashmap {
         K*  new_keys   = malloc(new_cap * sizeof(K));
         V*  new_vals   = malloc(new_cap * sizeof(V));
         u8* new_states = calloc(new_cap, sizeof(u8));
+
         usize mask = new_cap - 1;
 
         for (usize i = 0; i < self.cap; i++) {
             if (self.states[i] != EntryState.Occupied) continue;
+
             usize idx = self.hash_fn(self.keys[i]) & mask;
+
             for (usize j = 0; j < new_cap; j++) {
                 usize slot = (idx + j) & mask;
+
                 if (new_states[slot] == EntryState.Empty) {
                     new_keys[slot]   = self.keys[i];
                     new_vals[slot]   = self.vals[i];
@@ -204,9 +238,11 @@ struct hashmap {
             }
         }
 
+        // free buffers, not elements
         free(self.keys);
         free(self.vals);
         free(self.states);
+
         self.keys       = new_keys;
         self.vals       = new_vals;
         self.states     = new_states;
