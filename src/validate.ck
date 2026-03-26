@@ -47,6 +47,7 @@ fn validate_program(Program prog) -> Result(bool, String) {
             case (Decl.extern_d _): {}
             case (Decl.const_d _): {}
             case (Decl.alias_d _): {}
+            case (Decl.conditional_d _): {}
         }
     }
 

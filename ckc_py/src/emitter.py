@@ -165,6 +165,107 @@ class Emitter:
     def _render_param(self, p: Param) -> str:
         return self._render_type(p.type, p.name)
 
+    def _receiver_param(self, receiver_type: str, fn: FnDecl) -> str:
+        if self._is_const_receiver_method(fn):
+            return f"const {receiver_type}* self"
+        return f"{receiver_type}* self"
+
+    def _is_const_receiver_method(self, fn: FnDecl) -> bool:
+        # lifecycle methods are mutating by definition
+        if fn.lifecycle in ("init", "dinit"):
+            return False
+        if fn.body is None:
+            return False
+        return not self._block_mutates_self(fn.body)
+
+    def _block_mutates_self(self, block: Block) -> bool:
+        return any(self._stmt_mutates_self(s) for s in block.stmts)
+
+    def _stmt_mutates_self(self, s) -> bool:
+        if isinstance(s, ExprStmt):
+            return self._expr_mutates_self(s.expr)
+        if isinstance(s, LetStmt):
+            return s.value is not None and self._expr_mutates_self(s.value)
+        if isinstance(s, ReturnStmt):
+            return s.value is not None and self._expr_mutates_self(s.value)
+        if isinstance(s, IfStmt):
+            return (self._expr_mutates_self(s.cond)
+                    or self._block_mutates_self(s.then)
+                    or (s.else_ is not None and self._block_mutates_self(s.else_)))
+        if isinstance(s, WhileStmt):
+            return self._expr_mutates_self(s.cond) or self._block_mutates_self(s.body)
+        if isinstance(s, ForStmt):
+            return ((s.init is not None and self._stmt_mutates_self(s.init))
+                    or (s.cond is not None and self._expr_mutates_self(s.cond))
+                    or (s.post is not None and self._expr_mutates_self(s.post))
+                    or self._block_mutates_self(s.body))
+        if isinstance(s, SwitchStmt):
+            if self._expr_mutates_self(s.expr):
+                return True
+            for c in s.cases:
+                if c.value is not None and self._expr_mutates_self(c.value):
+                    return True
+                for cs in c.body:
+                    if self._stmt_mutates_self(cs):
+                        return True
+            return False
+        if isinstance(s, TagSwitchStmt):
+            if self._expr_mutates_self(s.expr):
+                return True
+            return any(self._block_mutates_self(c.body) for c in s.cases)
+        if isinstance(s, Block):
+            return self._block_mutates_self(s)
+        if isinstance(s, DeferStmt):
+            return self._block_mutates_self(s.body)
+        if isinstance(s, DInitCallStmt):
+            return self._expr_is_self_path(s.expr) or self._expr_mutates_self(s.expr)
+        return False
+
+    def _expr_is_self_path(self, e) -> bool:
+        if isinstance(e, SelfExpr):
+            return True
+        if isinstance(e, FieldAccess):
+            return self._expr_is_self_path(e.receiver)
+        if isinstance(e, Index):
+            return self._expr_is_self_path(e.receiver)
+        return False
+
+    def _expr_mutates_self(self, e) -> bool:
+        if e is None:
+            return False
+        if isinstance(e, Assign):
+            return self._expr_is_self_path(e.left) or self._expr_mutates_self(e.right)
+        if isinstance(e, UnaryOp):
+            if e.op in ("++", "--") and self._expr_is_self_path(e.operand):
+                return True
+            return self._expr_mutates_self(e.operand)
+        if isinstance(e, MethodCall):
+            # conservative: method call on self may mutate receiver
+            if self._expr_is_self_path(e.receiver):
+                return True
+            return (self._expr_mutates_self(e.receiver)
+                    or any(self._expr_mutates_self(a) for a in e.args))
+        if isinstance(e, Call):
+            return (self._expr_mutates_self(e.callee)
+                    or any(self._expr_mutates_self(a) for a in e.args))
+        if isinstance(e, FieldAccess):
+            return self._expr_mutates_self(e.receiver)
+        if isinstance(e, Index):
+            return self._expr_mutates_self(e.receiver) or self._expr_mutates_self(e.index)
+        if isinstance(e, BinOp):
+            return self._expr_mutates_self(e.left) or self._expr_mutates_self(e.right)
+        if isinstance(e, Ternary):
+            return (self._expr_mutates_self(e.cond)
+                    or self._expr_mutates_self(e.then)
+                    or self._expr_mutates_self(e.else_))
+        if isinstance(e, StructLit):
+            return any(self._expr_mutates_self(v) for _, v in e.fields)
+        if isinstance(e, NullCoalesce):
+            return self._expr_mutates_self(e.left) or self._expr_mutates_self(e.right)
+        if isinstance(e, Cast):
+            return self._expr_mutates_self(e.expr)
+        return False
+
     def _collect_decl_value_deps(self, d, known_type_names: set[str]) -> set[str]:
         """
         Return same-module type dependencies that require complete definitions.
@@ -464,7 +565,7 @@ class Emitter:
                 c_name = f"{prefix}_{fn.name}" if prefix else fn.name
             params = []
             if receiver_type and not is_init:
-                params.append(f"{receiver_type}* self")
+                params.append(self._receiver_param(receiver_type, fn))
             for p in fn.params:
                 params.append(self._render_param(p))
             if is_init and receiver_type:
@@ -641,7 +742,7 @@ class Emitter:
         # regular method: has self param
         params = []
         if receiver_type and not is_init:
-            params.append(f"{receiver_type}* self")
+            params.append(self._receiver_param(receiver_type, d))
         for p in d.params:
             params.append(self._render_param(p))
 

@@ -210,7 +210,8 @@ struct ExternDecl {
 
 struct TypeAlias { String name; TypeName type; usize line; };
 struct IncludeDecl { String path; usize line; };
-struct NamespaceDecl { String name; usize line; };
+struct NamespaceDecl { String name; vector(Decl) decls; usize line; };
+struct ConditionalDecl { Expr* condition; vector(Decl) body; usize line; };
 
 //
 // Decl union (last)
@@ -227,6 +228,7 @@ $tag union Decl {
     TagUnionDecl tag_union_d;
     EnumDecl enum_d;
     NamespaceDecl namespace_d;
+    ConditionalDecl conditional_d;
 };
 
 struct Program {

@@ -75,15 +75,12 @@ def subst_type(t: TypeName, env: dict[str, TypeName]) -> TypeName:
         concrete = env[t.name]
         pointer = t.pointer or concrete.pointer
         ref     = t.ref     or concrete.ref
-        # preserve const for fn-ptr types (needed for signature compatibility)
-        # strip const from plain pointer storage fields (char* keys not const char* keys)
-        is_fnptr = concrete.name == "__fnptr__"
         result = TypeName(
             name=concrete.name,
             args=copy.deepcopy(concrete.args),
             pointer=pointer,
             ref=ref,
-            const=(t.const or concrete.const) if (not t.pointer or is_fnptr) else False,
+            const=(t.const or concrete.const),
             array_size=new_size,
             fn_params=copy.deepcopy(concrete.fn_params),
             fn_ret=copy.deepcopy(concrete.fn_ret) if concrete.fn_ret else None,

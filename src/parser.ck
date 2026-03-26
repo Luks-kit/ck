@@ -31,6 +31,7 @@ struct Parser {
 
     fn _parse_decl() -> Result(bool, String) {
         if (self._match(TokType.Template))  return self._parse_template_decl();
+        if (self._match(TokType.ConstIf))   return self._parse_const_if_decl();
         if (self._match(TokType.Import))    return self._parse_import_like();
         if (self._match(TokType.Include))   return self._parse_until_semi();
         if (self._match(TokType.ConstExpr)) return self._parse_until_semi();
@@ -69,6 +70,25 @@ struct Parser {
 
         return Result(bool, String).err(self._err_here("expected declaration after $template"));
     }
+    
+    fn _parse_const_if_decl() -> Result(bool, String) {
+        self._expect(TokType.LParen, "expected '(' after $if");
+        usize pdepth = 1;
+        while (!self._is_eof() && pdepth > 0) {
+            if (self._match(TokType.LParen)) pdepth++;
+            else if (self._match(TokType.RParen)) pdepth--;
+            else self._advance();
+        }
+        self._expect(TokType.LBrace, "expected '{' after $if condition");
+        usize bdepth = 1;
+        while (!self._is_eof() && bdepth > 0) {
+            if (self._match(TokType.LBrace)) bdepth++;
+            else if (self._match(TokType.RBrace)) bdepth--;
+            else self._advance();
+        }
+        return Result(bool, String).ok(true);
+    }
+
 
     fn _parse_import_like() -> Result(bool, String) {
         if (!self._match(TokType.StringLit) && !self._match(TokType.Ident)) {
