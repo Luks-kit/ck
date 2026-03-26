@@ -79,6 +79,8 @@ class Emitter:
         self._fn_returns_ref:  dict[str, bool] = {}
         self._has_includes: bool = False  # true once any $include is emitted
         self._fwd_emitted: set[str] = set()  # names already emitted in fwd decls
+        self._defer_method_emit: bool = False
+        self._deferred_methods: list[tuple[FnDecl, str, str]] = []
 
     # ── output helpers ────────────────────────────────────────────────────────
 
@@ -163,6 +165,99 @@ class Emitter:
     def _render_param(self, p: Param) -> str:
         return self._render_type(p.type, p.name)
 
+    def _collect_decl_value_deps(self, d, known_type_names: set[str]) -> set[str]:
+        """
+        Return same-module type dependencies that require complete definitions.
+        Only by-value fields/variants require full size in C; pointer/ref fields do not.
+        """
+        deps: set[str] = set()
+
+        def visit_type(t: TypeName, needs_complete: bool = True):
+            if t is None:
+                return
+            if t.name == "__fnptr__":
+                for pt in t.fn_params:
+                    visit_type(pt, needs_complete=False)
+                if t.fn_ret:
+                    visit_type(t.fn_ret, needs_complete=False)
+                return
+
+            local_complete = needs_complete and not t.pointer and not t.ref
+            if local_complete and t.name in known_type_names:
+                deps.add(t.name)
+
+            # template args are materialized by value in the instantiated type
+            for arg in t.args:
+                visit_type(arg, needs_complete=local_complete)
+
+        if isinstance(d, StructDecl):
+            for f in d.fields:
+                visit_type(f.type, needs_complete=True)
+            deps.discard(d.name)
+        elif isinstance(d, TagUnionDecl):
+            for v in d.variants:
+                visit_type(v.type, needs_complete=True)
+            deps.discard(d.name)
+
+        return deps
+
+    def _order_type_decls(self, type_decls: list) -> list:
+        """
+        Order type declarations so struct/union definitions appear before any
+        by-value users that require their complete size in C.
+        """
+        types_with_identity = [
+            d for d in type_decls
+            if isinstance(d, (StructDecl, TagUnionDecl))
+        ]
+        if not types_with_identity:
+            return type_decls
+
+        decl_by_name = {d.name: d for d in types_with_identity}
+        known_names = set(decl_by_name.keys())
+        deps = {
+            name: self._collect_decl_value_deps(decl, known_names)
+            for name, decl in decl_by_name.items()
+        }
+
+        # stable Kahn: pick ready declarations in original source order
+        source_order = [d.name for d in type_decls if hasattr(d, "name")]
+        emitted: set[str] = set()
+        ordered_names: list[str] = []
+
+        while len(ordered_names) < len(types_with_identity):
+            ready = [
+                name for name in source_order
+                if name in decl_by_name
+                and name not in emitted
+                and deps[name].issubset(emitted)
+            ]
+            if not ready:
+                # cycle (e.g. mutual by-value recursion) — keep source order for remaining
+                for name in source_order:
+                    if name in decl_by_name and name not in emitted:
+                        ordered_names.append(name)
+                        emitted.add(name)
+                break
+
+            for name in ready:
+                ordered_names.append(name)
+                emitted.add(name)
+
+        ordered_types = [decl_by_name[name] for name in ordered_names]
+        ordered_type_names = {d.name for d in ordered_types}
+
+        # keep non-struct declarations in their original relative positions
+        # but splice struct/union declarations in dependency-resolved order.
+        type_iter = iter(ordered_types)
+        final: list = []
+        for d in type_decls:
+            if isinstance(d, (StructDecl, TagUnionDecl)) and d.name in ordered_type_names:
+                final.append(next(type_iter))
+            else:
+                final.append(d)
+        return final
+
     # ── program ───────────────────────────────────────────────────────────────
 
     def emit_program(self, prog: Program) -> str:
@@ -228,33 +323,29 @@ class Emitter:
         self._emit_forward_decls(type_decls, fn_decls_order)
 
         # 4. full type definitions (structs, unions, enums, typedefs, constexprs)
-        # PRIORITIZE PRIMITIVES HERE
-        prioritized_types = []
-        remaining_types = []
-
-        for d in type_decls:
-            # Force String and StringStorage to the front
-            if hasattr(d, 'name') and d.name in ["String", "StringStorage"]:
-                prioritized_types.append(d)
-            else:
-                remaining_types.append(d)
-
-        # Emit prioritized types first
-        for d in prioritized_types:
+        # dependency-order concrete structs/unions so by-value fields can compile
+        self._defer_method_emit = True
+        self._deferred_methods = []
+        ordered_type_decls = self._order_type_decls(type_decls)
+        for d in ordered_type_decls:
             self._emit_decl(d)
             self._blank()
-
-        # Then emit everything else
-        for d in remaining_types:
-            self._emit_decl(d)
-            self._blank()
+        self._defer_method_emit = False
 
         # 5. other (import comments, etc.)
         for d in other:
             self._emit_decl(d)
             self._blank()
 
-        # 6. all functions
+        # 6. deferred methods (after all concrete type layouts are known)
+        for method, prefix, receiver_type in self._deferred_methods:
+            saved_self = self._self_type
+            self._self_type = receiver_type
+            self._emit_fn(method, prefix=prefix, receiver_type=receiver_type)
+            self._self_type = saved_self
+            self._blank()
+
+        # 7. all top-level functions
         for d in fn_decls_order:
             self._emit_decl(d)
             self._blank()
@@ -466,7 +557,10 @@ class Emitter:
 
         # emit methods as prefixed free functions
         for method in d.methods:
-            self._emit_fn(method, prefix=d.name, receiver_type=d.name)
+            if self._defer_method_emit:
+                self._deferred_methods.append((method, d.name, d.name))
+            else:
+                self._emit_fn(method, prefix=d.name, receiver_type=d.name)
 
         self._self_type = saved_self
 
@@ -508,7 +602,10 @@ class Emitter:
 
         # emit methods
         for method in d.methods:
-            self._emit_fn(method, prefix=d.name, receiver_type=d.name)
+            if self._defer_method_emit:
+                self._deferred_methods.append((method, d.name, d.name))
+            else:
+                self._emit_fn(method, prefix=d.name, receiver_type=d.name)
 
         self._self_type = saved_self
 

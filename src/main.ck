@@ -1,6 +1,7 @@
 $import "std/string.ck";
 $import "std/io.ck";
 $import "lexer.ck";
+$import "parser.ck";
 
 type cstr = char*;
 
@@ -18,13 +19,18 @@ fn main(i32 argc, cstr* argv) -> i32 {
     Lexer lexer = Lexer.new(source.clone(), filename.clone());
     vector(Token) tokens = lexer.scan_tokens();
 
-    // 3. Dump tokens
-    Token tok;
-    for (usize i = 0; i < tokens.len; i++) {
-        tok = tokens.data[i];
-        printf("%s ", tok.lexeme.ptr()); 
+    // 3. Parse tokens
+    Parser parser = Parser.new(tokens);
+    Result(usize, String) parsed = parser.parse();
+    $tag switch(parsed) {
+        case(Result.ok decl_count): {
+            printf("parsed decls: %lu\n", decl_count);
+        }
+        case(Result.err e): {
+            printf("%s\n", e.ptr());
+            return 1;
+        }
     }
-    tok = Token.new(Span.new(filename), TokType.EOF, String.from("")); 
 
     return 0;
 }

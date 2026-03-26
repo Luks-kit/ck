@@ -165,6 +165,63 @@ def inject_field_dinits(prog: Program) -> Program:
     return Program(decls=new_decls, filename=prog.filename)
 
 
+def inject_tag_union_inits(prog: Program) -> Program:
+    """
+    Auto-generate $init constructors for $tag union variants when missing.
+    For variant `foo: T`, generate:
+      fn $init foo(T value) -> Self { return { .tag_ = Type_foo_, .foo = value }; }
+    Manual methods with the same name are preserved and not duplicated.
+    """
+    new_decls = []
+
+    for decl in prog.decls:
+        if isinstance(decl, TagUnionDecl):
+            existing_init_names = {
+                m.name for m in decl.methods
+                if m.lifecycle == "init"
+            }
+            auto_methods: list[FnDecl] = []
+
+            for v in decl.variants:
+                if v.name in existing_init_names:
+                    continue
+
+                value_param = Param(type=v.type, name="value")
+                tag_ident = Ident(name=f"{decl.name}_{v.name}_", line=decl.line)
+                lit = StructLit(
+                    type=None,
+                    fields=[
+                        ("tag_", tag_ident),
+                        (v.name, Ident(name="value", line=decl.line)),
+                    ],
+                    line=decl.line,
+                )
+                auto_methods.append(FnDecl(
+                    name=v.name,
+                    params=[value_param],
+                    return_type=TypeName(name="Self"),
+                    body=Block(stmts=[ReturnStmt(value=lit, line=decl.line)],
+                              line=decl.line),
+                    lifecycle="init",
+                    template_params=[],
+                    line=decl.line,
+                ))
+
+            if auto_methods:
+                decl = TagUnionDecl(
+                    name=decl.name,
+                    variants=decl.variants,
+                    methods=list(decl.methods) + auto_methods,
+                    template_params=decl.template_params,
+                    template_base=decl.template_base,
+                    line=decl.line,
+                )
+
+        new_decls.append(decl)
+
+    return Program(decls=new_decls, filename=prog.filename)
+
+
 class LifetimeVisitor:
     def __init__(self, dinit_types: dict[str, str]):
         self.dinit_types = dinit_types

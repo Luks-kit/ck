@@ -7,25 +7,6 @@ $tag union Literal {
     bool boolean;
     char character;
     String str;
-
-    fn $init integer(i64 i) -> Self { 
-        return {.tag_ = Literal_integer_, .integer = i}; 
-    }
-    fn $init uinteger(u64 u) -> Self {
-        return { .tag_ = Literal_uinteger_, .uinteger = u};
-    }
-    fn $init floating(f64 f) -> Self {
-        return { .tag_ = Literal_floating_, .floating = f};
-    }
-    fn $init character(char c) -> Self {
-        return { .tag_ = Literal_character_, .character = c};
-    }
-    fn $init str(String s) -> Self {
-        return { .tag_ = Literal_str_, .str = s.clone()};
-    }
-    fn $init boolean(bool b) -> Self {
-        return {.tag_ = Literal_boolean_, .boolean = b};
-    }
     
     fn $dinit delete() -> void {
        if(self.tag_ == Literal_str_){

@@ -13,7 +13,7 @@ from src.condeval  import evaluate,  CondError, BuildConfig
 from src.nsflat    import flatten
 from src.mono      import monomorphize
 from src.checker   import check,     InterfaceError
-from src.lifetime  import inject_field_dinits
+from src.lifetime  import inject_field_dinits, inject_tag_union_inits
 from src.emitter   import emit
 from src.header    import emit_header
 
@@ -99,6 +99,9 @@ def main():
     except InterfaceError as e:
         print(f"ckc: {e}", file=sys.stderr)
         sys.exit(1)
+
+    # ── inject auto $init for tag unions (per variant) ──────────────────────
+    ast = inject_tag_union_inits(ast)
 
     # ── interface check ───────────────────────────────────────────────────────
     try:

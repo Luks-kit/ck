@@ -92,6 +92,72 @@ class HeaderEmitter:
         guard = re.sub(r"[^A-Za-z0-9]", "_", stem).upper()
         return f"{guard}_H"
 
+    def _collect_value_deps(self, d, known_type_names: set[str]) -> set[str]:
+        deps: set[str] = set()
+
+        def visit(t: TypeName, needs_complete: bool = True):
+            if t is None:
+                return
+            if t.name == "__fnptr__":
+                for pt in t.fn_params:
+                    visit(pt, needs_complete=False)
+                if t.fn_ret:
+                    visit(t.fn_ret, needs_complete=False)
+                return
+
+            local_complete = needs_complete and not t.pointer and not t.ref
+            if local_complete and t.name in known_type_names:
+                deps.add(t.name)
+            for arg in t.args:
+                visit(arg, needs_complete=local_complete)
+
+        if isinstance(d, StructDecl):
+            for f in d.fields:
+                visit(f.type, needs_complete=True)
+            deps.discard(d.name)
+        elif isinstance(d, TagUnionDecl):
+            for v in d.variants:
+                visit(v.type, needs_complete=True)
+            deps.discard(d.name)
+        return deps
+
+    def _order_layout_types(self, decls: list) -> list:
+        layout = [d for d in decls if isinstance(d, (StructDecl, TagUnionDecl))]
+        if not layout:
+            return decls
+
+        by_name = {d.name: d for d in layout}
+        known = set(by_name.keys())
+        deps = {n: self._collect_value_deps(d, known) for n, d in by_name.items()}
+        source_order = [d.name for d in decls if hasattr(d, "name")]
+
+        emitted: set[str] = set()
+        ordered_names: list[str] = []
+        while len(ordered_names) < len(layout):
+            ready = [
+                n for n in source_order
+                if n in by_name and n not in emitted and deps[n].issubset(emitted)
+            ]
+            if not ready:
+                for n in source_order:
+                    if n in by_name and n not in emitted:
+                        ordered_names.append(n)
+                        emitted.add(n)
+                break
+            for n in ready:
+                ordered_names.append(n)
+                emitted.add(n)
+
+        ordered_layout = [by_name[n] for n in ordered_names]
+        it = iter(ordered_layout)
+        final: list = []
+        for d in decls:
+            if isinstance(d, (StructDecl, TagUnionDecl)) and d.name in by_name:
+                final.append(next(it))
+            else:
+                final.append(d)
+        return final
+
     # ── main emit ─────────────────────────────────────────────────────────────
 
     def emit(self) -> str:
@@ -146,7 +212,8 @@ class HeaderEmitter:
             self._w()
 
         # ── 5. struct/union definitions ───────────────────────────────────────
-        for d in decls:
+        ordered_decls = self._order_layout_types(decls)
+        for d in ordered_decls:
             if isinstance(d, StructDecl) and not d.is_interface:
                 self._emit_struct(d)
                 self._w()
