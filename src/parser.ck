@@ -32,7 +32,7 @@ struct Parser {
     fn _parse_decl() -> Result(bool, String) {
         if (self._match(TokType.Template))  return self._parse_template_decl();
         if (self._match(TokType.Import))    return self._parse_import_like();
-        if (self._match(TokType.Include))   return self._parse_import_like();
+        if (self._match(TokType.Include))   return self._parse_until_semi();
         if (self._match(TokType.ConstExpr)) return self._parse_until_semi();
         if (self._match(TokType.TypeDef))   return self._parse_until_semi();
         if (self._match(TokType.Enum))      return self._parse_braced_decl();
